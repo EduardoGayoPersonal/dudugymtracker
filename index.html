@@ -230,7 +230,7 @@ button{outline:none;}
 <body>
 
 <div class="topbar">
-  <div class="ey"><span>DuduGymTracker v2.4</span><span id="clock-top">—</span></div>
+  <div class="ey"><span>DuduGymTracker v2.5</span><span id="clock-top">—</span></div>
   <h1 id="topbar-title">DASHBOARD</h1>
   <div class="sub" id="topbar-sub">estado operacional</div>
 </div>
@@ -480,7 +480,17 @@ button{outline:none;}
   </div>
   <div class="nut-ref">
     <div class="lbl-top">Opções pré-treino</div>
-    <ul><li>Banana + whey + café</li><li>Skyr natural + banana</li><li>2 torradas integrais + fiambre de peru</li></ul>
+    <ul>
+      <li>Banana + whey + café</li>
+      <li>Skyr natural + banana</li>
+      <li>2 torradas integrais + fiambre de peru</li>
+      <li>Aveia com leite + mel + canela</li>
+      <li>Iogurte grego + fruta + granola leve</li>
+      <li>Pão integral + queijo fresco + tomate</li>
+      <li>Batata-doce cozida + 1 ovo cozido</li>
+      <li>Smoothie de banana + whey + aveia</li>
+      <li>Tosta de peito de peru + queijo magro</li>
+    </ul>
   </div>
   <div class="nut-ref ev">
     <div class="lbl-top" style="color:var(--re)">Evitar antes de treinar</div>
@@ -513,7 +523,7 @@ button{outline:none;}
 </div>
 
 <script>
-const APP_VERSION = 'DuduGymTracker v2.4';
+const APP_VERSION = 'DuduGymTracker v2.5';
 const ytL = q => 'https://www.youtube.com/results?search_query='+encodeURIComponent(q+' técnica execução');
 
 const WORKOUTS = {
@@ -908,7 +918,21 @@ function renderEx(){
   if(p.cf){const cf=p.cf;c.innerHTML+=`<div class="blk-lbl">Cardio final</div><div class="ex-card" id="card-cf"><div class="ex-head"><div><h3>${cf.nome}</h3><div class="ex-rec">Tempo <b>${cf.tempo}</b> · Vel <b>${cf.vel}</b> · Inc <b>${cf.inc}</b></div><div class="ex-obs">⚑ ${cf.alt}</div></div><div class="checks"><div class="chk" id="chk-cf" onclick="togChk('cf')" title="Concluído">✓</div><div class="chk occ" id="occ-cf" onclick="togCF()" title="Ocupada">⊘</div></div></div><div class="alt-section" id="alt-cf" style="display:none"><div class="alt-lbl">Alternativa ao cardio</div><div class="alt-opts">${(cf.alts||[]).map(a=>`<button class="alt-btn" onclick="selCAlt(this,'${a}')">${a}</button>`).join('')}</div><div class="alt-custom"><input type="text" id="alt-c-cf" placeholder="Outra..."><button class="ghost sm" onclick="selCAlt(null,document.getElementById('alt-c-cf').value)">OK</button></div><div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:7px;"><div><label class="flbl">Duração (min)</label><input type="number" id="cf-dur" placeholder="10"></div><div><label class="flbl">Notas</label><input type="text" id="cf-nota" placeholder="ex: nível 8"></div></div></div></div>`;}
 }
 function togChk(id){const el=document.getElementById('chk-'+id);const on=el.classList.toggle('on');document.getElementById('card-'+id).classList.toggle('done',on);saveDraftNow();updateProgress();}
-function togSK(id,i){document.getElementById('sk-'+id+'-'+i).classList.toggle('on');saveDraftNow();}
+function togSK(id,i){
+  document.getElementById('sk-'+id+'-'+i).classList.toggle('on');
+  autoCheckExercise(id);
+}
+function autoCheckExercise(id){
+  const sets=document.querySelectorAll(`[id^="sk-${id}-"]`);
+  if(sets.length){
+    const allDone=[...sets].every(s=>s.classList.contains('on'));
+    const chk=document.getElementById('chk-'+id);
+    const card=document.getElementById('card-'+id);
+    if(chk&&card){ chk.classList.toggle('on',allDone); card.classList.toggle('done',allDone); }
+  }
+  saveDraftNow();
+  updateProgress();
+}
 function togOcc(id){const el=document.getElementById('occ-'+id);const on=el.classList.toggle('on');document.getElementById('card-'+id).classList.toggle('occupied',on);const a=document.getElementById('alt-'+id);if(a)a.style.display=on?'block':'none';saveDraftNow();}
 function updateProgress(){
   const p=WORKOUTS[CW];
@@ -1203,6 +1227,8 @@ function cancelEdit(){
   renderHist();
 }
 function buildEditForm(sess){
+  const plano=WORKOUTS[sess.treino]||{};
+  const w=sess.wellness||{pre:{},post:{}};
   const exHtml=(sess.exercicios||[]).map(e=>{
     let seriesHtml='';
     const isIso = e.series && e.series.length===1 && e.series[0].tempo!==undefined;
@@ -1226,6 +1252,44 @@ function buildEditForm(sess){
       <div class="ex-nota" style="margin-top:8px;"><label class="flbl">Notas</label><textarea id="edit-nota-${sess.id}-${e.id}">${e.nota||''}</textarea></div>
     </div>`;
   }).join('');
+
+  let aqHtml='';
+  if(plano.aq){
+    aqHtml=`<div class="ex-card" style="margin-top:8px;"><div class="ex-head"><div><h3>${plano.aq.nome} (Aquecimento)</h3></div><div class="checks"><div class="chk ${sess.aquecimentoConcluido?'on':''}" id="edit-aq-${sess.id}" onclick="this.classList.toggle('on')" title="Concluído">✓</div></div></div></div>`;
+  }
+  let cfHtml='';
+  if(plano.cf){
+    cfHtml=`<div class="ex-card" style="margin-top:8px;">
+      <div class="ex-head"><div><h3>${plano.cf.nome}</h3></div>
+        <div class="checks">
+          <div class="chk ${sess.cardioFinalConcluido?'on':''}" id="edit-cfchk-${sess.id}" onclick="this.classList.toggle('on')" title="Concluído">✓</div>
+          <div class="chk occ ${sess.cardioFinalOcupada?'on':''}" id="edit-cfocc-${sess.id}" onclick="this.classList.toggle('on')" title="Ocupada">⊘</div>
+        </div>
+      </div>
+      <div class="ex-inputs" style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div><label class="flbl">Alternativa (se ocupada)</label><input type="text" id="edit-cfalt-${sess.id}" value="${sess.cardioFinalAlternativa||''}" placeholder="ex: Bicicleta"></div>
+        <div><label class="flbl">Duração (min)</label><input type="number" id="edit-cfdur-${sess.id}" value="${sess.cardioFinalDuracao||''}"></div>
+      </div>
+      <div style="margin-top:8px;"><label class="flbl">Notas do cardio</label><input type="text" id="edit-cfnota-${sess.id}" value="${sess.cardioFinalNotas||''}"></div>
+    </div>`;
+  }
+
+  const wellHtml=`<div class="card wide" style="margin-top:10px;">
+    <div class="lbl" style="margin-bottom:8px;">Wellness pré-treino</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div><label class="flbl">Energia (1-5)</label><input type="number" min="1" max="5" id="edit-w-energia-${sess.id}" value="${w.pre?.energia??''}"></div>
+      <div><label class="flbl">Sono (1-5)</label><input type="number" min="1" max="5" id="edit-w-sono-${sess.id}" value="${w.pre?.sono??''}"></div>
+      <div><label class="flbl">Recuperação (0-4)</label><input type="number" min="0" max="4" id="edit-w-doms-${sess.id}" value="${w.pre?.doms??''}"></div>
+      <div><label class="flbl">Motivação (1-5)</label><input type="number" min="1" max="5" id="edit-w-motiv-${sess.id}" value="${w.pre?.motiv??''}"></div>
+    </div>
+    <div class="lbl" style="margin:12px 0 8px;">Wellness pós-treino</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div><label class="flbl">RPE (1-10)</label><input type="number" min="1" max="10" id="edit-w-rpe-${sess.id}" value="${w.post?.rpe??''}"></div>
+      <div><label class="flbl">Satisfação (1-5)</label><input type="number" min="1" max="5" id="edit-w-sat-${sess.id}" value="${w.post?.sat??''}"></div>
+      <div><label class="flbl">Energia pós (1-5)</label><input type="number" min="1" max="5" id="edit-w-epos-${sess.id}" value="${w.post?.epos??''}"></div>
+    </div>
+  </div>`;
+
   return`
     <div class="sess-meta" style="margin-top:0;">
       <div><label class="flbl">Data</label><input type="date" id="edit-data-${sess.id}" value="${sess.data}"></div>
@@ -1233,7 +1297,10 @@ function buildEditForm(sess){
       <div><label class="flbl">Hora fim</label><input type="time" id="edit-fim-${sess.id}" value="${sess.fim}"></div>
       <div class="full"><label class="flbl">Notas da sessão</label><textarea id="edit-notas-${sess.id}">${sess.notas||''}</textarea></div>
     </div>
+    ${aqHtml}
     ${exHtml}
+    ${cfHtml}
+    ${wellHtml}
     <div style="display:flex;gap:8px;margin-top:12px;">
       <button class="solid" style="flex:1" onclick="saveEditedSession('${sess.id}')">Guardar alterações</button>
       <button class="ghost" style="flex:1" onclick="cancelEdit()">Cancelar</button>
@@ -1267,6 +1334,25 @@ function saveEditedSession(id){
     return{...e,concluido,ocupada,nota,series};
   });
   recalcFromSessions();
+  const plano=WORKOUTS[sess.treino]||{};
+  if(plano.aq) sess.aquecimentoConcluido=document.getElementById('edit-aq-'+id)?.classList.contains('on')||false;
+  if(plano.cf){
+    sess.cardioFinalConcluido=document.getElementById('edit-cfchk-'+id)?.classList.contains('on')||false;
+    sess.cardioFinalOcupada=document.getElementById('edit-cfocc-'+id)?.classList.contains('on')||false;
+    sess.cardioFinalAlternativa=document.getElementById('edit-cfalt-'+id)?.value||null;
+    sess.cardioFinalDuracao=document.getElementById('edit-cfdur-'+id)?.value||null;
+    sess.cardioFinalNotas=document.getElementById('edit-cfnota-'+id)?.value||null;
+  }
+  const gv=eid=>{ const el=document.getElementById(eid); if(!el||el.value==='') return null; return parseFloat(el.value); };
+  sess.wellness={
+    pre:{
+      energia:gv('edit-w-energia-'+id), sono:gv('edit-w-sono-'+id),
+      doms:gv('edit-w-doms-'+id), motiv:gv('edit-w-motiv-'+id)
+    },
+    post:{
+      rpe:gv('edit-w-rpe-'+id), sat:gv('edit-w-sat-'+id), epos:gv('edit-w-epos-'+id)
+    }
+  };
   save();
   if(newPastSessionId===id) newPastSessionId=null;
   editingSessionId=null;
