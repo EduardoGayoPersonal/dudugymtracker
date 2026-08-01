@@ -230,7 +230,7 @@ button{outline:none;}
 <body>
 
 <div class="topbar">
-  <div class="ey"><span>DuduGymTracker v2.2</span><span id="clock-top">—</span></div>
+  <div class="ey"><span>DuduGymTracker v2.4</span><span id="clock-top">—</span></div>
   <h1 id="topbar-title">DASHBOARD</h1>
   <div class="sub" id="topbar-sub">estado operacional</div>
 </div>
@@ -241,9 +241,9 @@ button{outline:none;}
 
 <!-- TIMER -->
 <div id="timer-overlay">
-  <div style="position:absolute;top:18px;right:16px;"><button class="ghost sm" onclick="closeTimer()">✕</button></div>
+  <div style="position:absolute;top:calc(18px + env(safe-area-inset-top));right:16px;"><button class="ghost" onclick="closeTimer()" style="width:44px;height:44px;padding:0;font-size:16px;">✕</button></div>
   <div class="t-mode" id="t-mode-lbl">DESCANSO</div>
-  <div class="t-display" id="t-display">01:30</div>
+  <div class="t-display" id="t-display">01:00</div>
   <div class="t-presets">
     <button class="ghost sm" onclick="setTimer(30)">30s</button>
     <button class="ghost sm" onclick="setTimer(60)">60s</button>
@@ -331,12 +331,7 @@ button{outline:none;}
   <div class="sess-meta">
     <div><label class="flbl">Data</label><input type="date" id="s-data"></div>
     <div><label class="flbl">Hora início</label><input type="time" id="s-ini" onchange="updDur()"></div>
-    <div class="full" style="display:flex;gap:7px;align-items:flex-end;">
-      <div style="flex:1"><label class="flbl">Hora fim</label><input type="time" id="s-fim" onchange="updDur()"></div>
-      <button class="ghost sm" onclick="markNow()">Agora</button>
-    </div>
     <div class="full"><label class="flbl">Notas da sessão</label><textarea id="s-notas" placeholder="energia, sono, sensações..."></textarea></div>
-    <div class="dur-row"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--td)">DURAÇÃO</span><span class="dur-val" id="s-dur">00:00</span></div>
   </div>
 
   <!-- PRE-WORKOUT BRIEFING -->
@@ -396,6 +391,13 @@ button{outline:none;}
     </div>
   </div>
 
+  <div class="sess-meta" style="margin-top:12px;">
+    <div class="full" style="display:flex;gap:7px;align-items:flex-end;">
+      <div style="flex:1"><label class="flbl">Hora fim</label><input type="time" id="s-fim" onchange="updDur()"></div>
+      <button class="ghost sm" onclick="markNow()">Agora</button>
+    </div>
+    <div class="dur-row"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--td)">DURAÇÃO</span><span class="dur-val" id="s-dur">00:00</span></div>
+  </div>
   <div class="save-bar"><button class="solid" onclick="saveSession()">Guardar sessão · Treino <span id="save-lbl">A</span></button></div>
 </div>
 
@@ -449,6 +451,15 @@ button{outline:none;}
 <!-- ===== HISTÓRICO ===== -->
 <div class="view" id="view-historico">
   <div class="stitle"><h2>Registo de sessões</h2><span class="tag" id="hist-cnt">0</span></div>
+  <button class="ghost full" onclick="toggleAddPast()" style="margin-bottom:10px;">+ Adicionar sessão passada</button>
+  <div id="add-past-picker" style="display:none;margin-bottom:12px;background:var(--s);border:1px solid var(--ln);border-radius:2px;padding:12px;">
+    <div class="lbl" style="margin-bottom:9px;">Baseado em qual treino?</div>
+    <div style="display:flex;gap:8px;">
+      <button class="ghost" style="flex:1" onclick="createPastSession('A')">Treino A</button>
+      <button class="ghost" style="flex:1" onclick="createPastSession('B')">Treino B</button>
+      <button class="ghost" style="flex:1" onclick="createPastSession('C')">Treino C</button>
+    </div>
+  </div>
   <div class="search-row">
     <input type="date" id="hist-f" onchange="renderHist()">
     <button class="ghost sm" onclick="document.getElementById('hist-f').value='';renderHist()">Limpar</button>
@@ -502,7 +513,7 @@ button{outline:none;}
 </div>
 
 <script>
-const APP_VERSION = 'DuduGymTracker v2.2';
+const APP_VERSION = 'DuduGymTracker v2.4';
 const ytL = q => 'https://www.youtube.com/results?search_query='+encodeURIComponent(q+' técnica execução');
 
 const WORKOUTS = {
@@ -564,21 +575,45 @@ const RPE_LABELS = {1:'Repouso',2:'Muito fácil',3:'Fácil',4:'Moderado',5:'Mode
 
 /* ===== STORAGE ===== */
 const SK = 'dgt_v21';
+const SK_BACKUP = 'dgt_v21_backup';
 function dflt(){return{perfil:{pesoAtual:null,gorduraAtual:null,pesoHist:[],gordHist:[]},ultimaCarga:{},ultimaSeries:{},streak:{},ocupadaCount:{},coachMsgs:[],sessoes:[],nutricao:{min:120,max:140,nota:''}};}
+function safeParse(key){
+  try{
+    const r=localStorage.getItem(key);
+    if(!r) return null;
+    const p=JSON.parse(r);
+    // validação básica: se sessoes existir mas não for array, os dados estão corrompidos — não confiar
+    if(p.sessoes!=null && !Array.isArray(p.sessoes)) return null;
+    return p;
+  }catch{ return null; }
+}
 let D = (()=>{
   try{
     let b=dflt();
     ['gayo_fit_dossier_v1','dossier_dudu_v2'].forEach(k=>{
-      const r=localStorage.getItem(k);
-      if(r){try{const p=JSON.parse(r);Object.assign(b,p);if(p.perfil)Object.assign(b.perfil,p.perfil);if(p.nutricao)Object.assign(b.nutricao,p.nutricao);}catch{}}
+      const p=safeParse(k);
+      if(p){Object.assign(b,p);if(p.perfil)Object.assign(b.perfil,p.perfil);if(p.nutricao)Object.assign(b.nutricao,p.nutricao);}
     });
-    const r=localStorage.getItem(SK);
-    if(r){try{const p=JSON.parse(r);Object.assign(b,p);if(p.perfil)Object.assign(b.perfil,p.perfil);if(p.nutricao)Object.assign(b.nutricao,p.nutricao);}catch{}}
+    let primary=safeParse(SK);
+    let usedBackup=false;
+    if(!primary){
+      // ficheiro principal falhou/corrompido — tenta recuperar da cópia de segurança
+      primary=safeParse(SK_BACKUP);
+      if(primary) usedBackup=true;
+    }
+    if(primary){Object.assign(b,primary);if(primary.perfil)Object.assign(b.perfil,primary.perfil);if(primary.nutricao)Object.assign(b.nutricao,primary.nutricao);}
     if(b.perfil.pesoAtual==null){b.perfil.pesoAtual=66.3;b.perfil.gorduraAtual=10.2;b.perfil.pesoHist=[{data:'2026-06-15',v:66.3}];b.perfil.gordHist=[{data:'2026-06-15',v:10.2}];}
+    if(usedBackup){ setTimeout(()=>toast('Dados principais falharam — recuperados da cópia de segurança',true), 800); }
     return b;
   }catch{return dflt();}
 })();
-function save(){try{localStorage.setItem(SK,JSON.stringify(D));}catch{toast('Erro ao guardar',true);}}
+function save(){
+  try{
+    const json=JSON.stringify(D);
+    localStorage.setItem(SK,json);
+    localStorage.setItem(SK_BACKUP,json); // cópia de segurança espelhada, a cada gravação
+  }catch{toast('Erro ao guardar',true);}
+}
 
 /* ===== TOAST ===== */
 let toastT;
@@ -644,7 +679,38 @@ function exportData(){
 function importData(input){
   const file=input.files[0];if(!file)return;
   const reader=new FileReader();
-  reader.onload=e=>{try{const p=JSON.parse(e.target.result);Object.assign(D,p);if(p.perfil)Object.assign(D.perfil,p.perfil);if(p.nutricao)Object.assign(D.nutricao,p.nutricao);save();renderDash();toast('Dados importados!');}catch{toast('Ficheiro inválido',true);}};
+  reader.onload=e=>{
+    try{
+      const p=JSON.parse(e.target.result);
+      if(p.sessoes==null || !Array.isArray(p.sessoes)){toast('Ficheiro inválido',true);return;}
+
+      // FUSÃO, nunca substituição: junta sessões do ficheiro às existentes, sem duplicar por id
+      const existingIds=new Set(D.sessoes.map(s=>s.id));
+      let added=0;
+      p.sessoes.forEach(s=>{ if(!existingIds.has(s.id)){ D.sessoes.push(s); existingIds.add(s.id); added++; } });
+
+      // Fusão do histórico de peso/gordura, sem duplicar por data+valor
+      if(p.perfil){
+        ['pesoHist','gordHist'].forEach(k=>{
+          if(Array.isArray(p.perfil[k])){
+            const seen=new Set(D.perfil[k].map(x=>x.data+'|'+x.v));
+            p.perfil[k].forEach(x=>{ const key=x.data+'|'+x.v; if(!seen.has(key)){ D.perfil[k].push(x); seen.add(key); } });
+          }
+        });
+        // atualiza peso/gordura "atual" para o registo mais recente entre os dois conjuntos
+        const lastPeso=[...D.perfil.pesoHist].sort((a,b)=>a.data.localeCompare(b.data)).pop();
+        const lastGord=[...D.perfil.gordHist].sort((a,b)=>a.data.localeCompare(b.data)).pop();
+        if(lastPeso) D.perfil.pesoAtual=lastPeso.v;
+        if(lastGord) D.perfil.gorduraAtual=lastGord.v;
+      }
+      if(p.nutricao) Object.assign(D.nutricao,p.nutricao);
+
+      recalcFromSessions(); // reconstrói cargas recomendadas e ocupações a partir do conjunto completo
+      save();
+      renderDash();
+      toast(added>0?`Importado! ${added} sessão(ões) nova(s) adicionada(s)`:'Ficheiro importado — sem sessões novas (já existiam)');
+    }catch{toast('Ficheiro inválido',true);}
+  };
   reader.readAsText(file);input.value='';
 }
 
@@ -1057,6 +1123,7 @@ function delBodyEntry(kind,idx){
 function fmtD(iso){const[y,m,d]=iso.split('-');return d+'/'+m+'/'+y;}
 function fmtHM(m){return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m';}
 let editingSessionId=null;
+let newPastSessionId=null; // se != null, é uma sessão recém-criada ainda não confirmada
 function renderHist(){
   const c=document.getElementById('hist-list');const f=document.getElementById('hist-f').value;
   let ss=f?D.sessoes.filter(s=>s.data===f):D.sessoes;
@@ -1087,7 +1154,54 @@ function renderHist(){
   }).join('');
 }
 function startEdit(id){ editingSessionId=id; renderHist(); }
-function cancelEdit(){ editingSessionId=null; renderHist(); }
+function toggleAddPast(){
+  const el=document.getElementById('add-past-picker');
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+function createPastSession(letra){
+  const plano=WORKOUTS[letra];
+  const today=new Date().toISOString().slice(0,10);
+  const exercicios=plano.ex.map(ex=>{
+    let series;
+    if(ex.tipo==='iso'||ex.iso){ series=[{tempo:'',ok:false}]; }
+    else{ series=Array.from({length:ex.s},()=>({c:'',r:'',ok:false})); }
+    return{id:ex.id,nome:ex.nome,series,concluido:false,ocupada:false,nota:'',alternativa:null};
+  });
+  const newSess={
+    id:'s_'+Date.now(),
+    treino:letra,
+    data:today,
+    ini:'08:00',
+    fim:'09:00',
+    durMin:60,
+    notas:'',
+    exercicios,
+    aquecimentoConcluido:plano.aq?false:null,
+    cardioFinalConcluido:plano.cf?false:null,
+    cardioFinalOcupada:false,
+    cardioFinalAlternativa:null,
+    cardioFinalDuracao:null,
+    cardioFinalNotas:null,
+    wellness:{pre:{},post:{}}
+  };
+  D.sessoes.push(newSess);
+  save();
+  document.getElementById('add-past-picker').style.display='none';
+  editingSessionId=newSess.id;
+  newPastSessionId=newSess.id;
+  renderHist();
+  toast('Preenche a data, horas e dados reais, depois grava');
+}
+function cancelEdit(){
+  if(newPastSessionId){
+    D.sessoes=D.sessoes.filter(s=>s.id!==newPastSessionId);
+    recalcFromSessions();
+    save();
+    newPastSessionId=null;
+  }
+  editingSessionId=null;
+  renderHist();
+}
 function buildEditForm(sess){
   const exHtml=(sess.exercicios||[]).map(e=>{
     let seriesHtml='';
@@ -1154,6 +1268,7 @@ function saveEditedSession(id){
   });
   recalcFromSessions();
   save();
+  if(newPastSessionId===id) newPastSessionId=null;
   editingSessionId=null;
   renderHist();
   toast('Sessão atualizada');
@@ -1233,7 +1348,7 @@ function showMoreTips(){tipsShown=Math.min(tipsShown+3,TIPS.length);renderTips()
 function renderLib(){document.getElementById('lib-list').innerHTML=Object.entries(LIBRARY).map(([nome,l])=>`<div class="lib-card"><h3>${nome}</h3><div class="lib-row"><b>Descrição</b>${l.desc}</div><div class="lib-row"><b>Execução</b>${l.exec}</div><div class="lib-row"><b>Erros comuns</b>${l.erros}</div><div class="lib-row"><b>Músculos</b>${l.mus}</div><div class="lib-links"><a href="${ytL(nome)}" target="_blank" rel="noopener">↗ Vídeo</a></div></div>`).join('');}
 
 /* ===== TIMER ===== */
-let tI=null,tS=0,tR=false,tMode='cd',tMax=90;
+let tI=null,tS=60,tR=false,tMode='cd',tMax=60;
 function openTimer(){document.getElementById('timer-overlay').classList.add('visible');}
 function closeTimer(){document.getElementById('timer-overlay').classList.remove('visible');}
 function setTimer(s){tMax=s;tS=s;tR=false;clearInterval(tI);updT();document.getElementById('t-ss').textContent='Iniciar';}
@@ -1266,6 +1381,11 @@ window.addEventListener('pagehide', ()=>{
 window.addEventListener('blur', ()=>{
   if(document.getElementById('view-treino').classList.contains('active')) saveDraftNow();
 });
+// Rede de segurança extra: grava periodicamente enquanto estás na aba Treino,
+// mesmo que nenhum evento específico tenha disparado (ex: ficaste parado no cronómetro).
+setInterval(()=>{
+  if(document.getElementById('view-treino').classList.contains('active')) saveDraftNow();
+}, 5000);
 
 /* ===== INIT ===== */
 /* ===== FRASE DO DIA ===== */
