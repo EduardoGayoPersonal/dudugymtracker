@@ -230,7 +230,7 @@ button{outline:none;}
 <body>
 
 <div class="topbar">
-  <div class="ey"><span>DuduGymTracker v2.5</span><span id="clock-top">—</span></div>
+  <div class="ey"><span>DuduGymTracker v2.6</span><span id="clock-top">—</span></div>
   <h1 id="topbar-title">DASHBOARD</h1>
   <div class="sub" id="topbar-sub">estado operacional</div>
 </div>
@@ -523,7 +523,7 @@ button{outline:none;}
 </div>
 
 <script>
-const APP_VERSION = 'DuduGymTracker v2.5';
+const APP_VERSION = 'DuduGymTracker v2.6';
 const ytL = q => 'https://www.youtube.com/results?search_query='+encodeURIComponent(q+' técnica execução');
 
 const WORKOUTS = {
@@ -623,6 +623,18 @@ function save(){
     localStorage.setItem(SK,json);
     localStorage.setItem(SK_BACKUP,json); // cópia de segurança espelhada, a cada gravação
   }catch{toast('Erro ao guardar',true);}
+  maybeAutoExport();
+}
+const AUTO_EXPORT_INTERVAL_MS=30*60*1000; // 30 minutos
+function maybeAutoExport(){
+  if(D.sessoes.length===0 && D.perfil.pesoHist.length===0) return; // nada a proteger ainda
+  try{
+    const last=parseInt(localStorage.getItem('dgt_last_autoexport')||'0');
+    if(Date.now()-last>=AUTO_EXPORT_INTERVAL_MS){
+      exportData();
+      localStorage.setItem('dgt_last_autoexport',String(Date.now()));
+    }
+  }catch{}
 }
 
 /* ===== TOAST ===== */
